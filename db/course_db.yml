@@ -1,0 +1,86 @@
+---
+- name: Install MySQL
+  hosts: course_db
+  become: true
+  vars:
+    mysql_root_user: root
+    mysql_root_password: root
+    mysql_user_password: vagrant
+    database_name: example_db
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        
+    - name: Install Python3
+      apt:
+        name: python3
+        state: present
+        
+    - name: Install pip
+      become: true
+      apt:
+        name: python3-pip
+        state: present
+
+    - name: Install PyMySQL
+      vars:
+        - ansible_python_interpreter: /usr/bin/python3
+      become: true
+      pip:
+        name: PyMySQL
+        state: present
+        
+    - name: Install MySQL server
+      apt:
+        name: mysql-server
+        state: present
+
+    - name: Ensure MySQL service is running
+      systemd:
+        name: mysql
+        state: started
+        enabled: yes
+
+    - name: Create database
+      command: >
+        mysql
+        -u "{{ mysql_root_user }}"
+        -p"{{ mysql_root_password }}"
+        -e "CREATE DATABASE IF NOT EXISTS {{ database_name }} default character set utf8 collate utf8_unicode_ci;"
+        
+    - name: Set MySQL Bind Address in Configuration File
+      lineinfile:
+        dest: /etc/mysql/mysql.conf.d/mysqld.cnf
+        regexp: "^bind-address\\s*=\\s*"
+        line: "bind-address = 0.0.0.0"
+        state: present
+        backup: yes
+      notify:
+        - Restart MySQL Service
+                           
+    - name: Create user with different permissions to different databases
+      command: >
+        mysql 
+        -u root 
+        -p'{{ mysql_root_password }}'
+        -e "CREATE USER 'vagrant'@'192.168.33.1' IDENTIFIED BY '{{ mysql_user_password }}';"  
+        
+    - name: Grant user
+      command: >
+        mysql 
+        -u root 
+        -p'{{ mysql_root_password }}'
+        -e "GRANT ALL ON {{ database_name }}.* TO 'vagrant'@'192.168.33.1'; "       
+        
+  handlers:
+    - name: Restart MySQL Service
+      service:
+        name: mysql
+        state: restarted
+ 
+        
+        
+        
+       
+      
